@@ -3,114 +3,388 @@
 #include <cmath>
 #include <Windows.h>
 #include <vector>
+#include <numeric>
+#include <chrono>
+
+class Donut {
+    public :
+        const float radius_tube = 2.0;
+        const float radius_torus = 3.0;
+        const float torus_distance = 5.0;
+        const float screen_width = 40.0;
+        const float phi_steps = 80.0;
+        const float theta_steps = 40.0;
+        const float phi_spacing = M_PI * 2.0 / phi_steps;
+        const float theta_spacing = M_PI * 2.0 / theta_steps;
+        const int dimensions = 3;
+        const float viewing_distance = screen_width * torus_distance * 3.0 / (8.0 * (radius_tube + radius_torus));
+        std::vector<float> light_direction{ 1.0, 1.0, -1.0};
+        std::vector<std::vector<std::vector<float>>> torus;
+        std::vector<std::vector<float>> torus_center;
+        std::vector<std::vector<float>> torus_luminance;
+        const std::string shading_chars = ".,-~:;=!*#$@";
+        float max_luminance = 0;
 
 
-
-std::string GetBackpaces(const int length)
-{
-    std::string backspaces = "";
-    for (int i = 0; i < length; i++)
+    std::vector<float> RotateOnY(std::vector<float> coordinates, float angle)
     {
-        backspaces += "\b \b";
-        //std::cout << "\b \b" << std::flush;
+        std::vector<float> rotated_coords(3);
+        float sin_angle = sin(angle);
+        float cos_angle = cos(angle);
+        float x = coordinates[0];
+        float y = coordinates[1];
+        float z = coordinates[2];
+        rotated_coords[0] = x * cos_angle + z * sin_angle;
+        rotated_coords[1] = y;
+        rotated_coords[2] = x * (-sin_angle) + z * cos_angle;
+        return rotated_coords;
     }
-    std::cout << backspaces << std::flush;
-    return backspaces;
-}
 
 
-void PrintWithTick(std::string string_to_print, const int tick_time)
-{
-    std::cout << string_to_print << std::flush;
-    Sleep(tick_time);
-    std::cout << GetBackpaces(string_to_print.length()) << std::flush;
-}
-
-void RenderFrame()
-{
-
-}
-
-void render_test()
-{
-    std::string print_sequence[4] = { "-", "\\", "|", "/" };
-    while (true)
+    std::vector<float> RotateOnX(std::vector<float> coordinates, float angle)
     {
-        const int tick_time = 100;
-        for (int i = 0; i < 1000; i++) {
-            PrintWithTick(print_sequence[i % 4], tick_time);
+        std::vector<float> rotated_coords(3);
+        float sin_angle = sin(angle);
+        float cos_angle = cos(angle);
+        float x = coordinates[0];
+        float y = coordinates[1];
+        float z = coordinates[2];
+        rotated_coords[0] = x;
+        rotated_coords[1] = y * cos_angle + z * (-sin_angle);
+        rotated_coords[2] = y * sin_angle + z * cos_angle;
+        return rotated_coords;
+    }
+
+
+    std::vector<float> RotateOnXandY(std::vector<float> coordinates, float angle)
+    {
+        std::vector<float> x_rotation = RotateOnX(coordinates, angle);
+        std::vector<float> rotated_coords = RotateOnY(coordinates, angle + M_PI / 4);
+        return rotated_coords;
+    }
+
+    void CreateTorus()
+    {
+        torus.clear();
+        torus_luminance.clear();
+        max_luminance = 0;
+        float x, y, z, x_middle, y_middle, z_middle;
+
+
+
+        for (int phi_n = 0; phi_n < phi_steps; phi_n++)
+        {
+            std::vector<std::vector<float>> theta_vector;
+            std::vector<float> theta_luminance_vector;
+
+
+            const float sin_phi = sin(phi_n * phi_spacing);
+            const float cos_phi = cos(phi_n * phi_spacing);
+            float luminance;
+
+            x_middle = radius_torus * cos_phi;
+            y_middle = radius_torus * sin_phi;
+            z_middle = 0.0;
+            torus_center.push_back(std::vector<float>{x_middle, y_middle, z_middle});
+
+
+
+            for (int theta_n = 0; theta_n < theta_steps; theta_n++)
+            {
+                const float sin_theta = sin(theta_n * theta_spacing);
+                const float cos_theta = cos(theta_n * theta_spacing);
+                x = cos_phi * (radius_tube * cos_theta + radius_torus);
+                y = sin_phi * (radius_tube * cos_theta + radius_torus);
+                z = radius_tube * sin_theta;
+
+
+
+                std::vector<float> coordinates = {x, y, z};
+                std::vector<float> middle_coordinates = {x_middle, y_middle, z_middle};
+
+                theta_vector.push_back(coordinates);
+
+
+                std::vector<float> normals;
+                for (int i = 0; i < coordinates.size(); i++)
+                {
+                    normals.push_back(coordinates[i] - middle_coordinates[i]);
+                }
+
+                luminance = normals[0] * light_direction[0] + normals[1] * light_direction[1] + normals[2] * light_direction[2];
+                theta_luminance_vector.push_back(luminance);
+                if (luminance > max_luminance) {
+                    max_luminance = luminance;
+                }
+
+
+            }
+            torus.push_back(theta_vector);
+            torus_luminance.push_back(theta_luminance_vector);
         }
     }
-}
 
-std::vector<float> GetTorusXYZ(float theta, float phi, float radius_tube, float radius_torus)
-{
-    // radius_tube: Respresents the radius of the crosscut of the tube
-    // radius_torus: Represents the radius from the center of the tube 
-    // to the center of the torus.
-    std::vector<float> coordinates(3);
-    float x = (radius_torus + radius_tube * cos(theta)) * cos(phi);
-    float y = (radius_torus + radius_tube * cos(theta)) * sin(phi);
-    float z = radius_tube * sin(theta);
-    coordinates[0] = x;
-    coordinates[1] = y;
-    coordinates[2] = z;
-    return coordinates;
-}
-
-
-std::vector<std::vector<std::vector<float>>> GetCompleteTorus(const float radius_tube, const float radius_torus, const int phi_steps, const int theta_steps)
-{
-    const float phi_spacing = M_PI*2/phi_steps;
-    const float theta_spacing = M_PI*2 / theta_steps;
-    const int dimensions = 3;
-    std::vector<std::vector<std::vector<float>>> complete_torus(phi_steps, std::vector<std::vector<float>>(theta_steps, std::vector<float>(dimensions)));
-    for (int phi_n = 0; phi_n < phi_steps; phi_n++)
+    void UpdateTorus(const float spin_angle)
     {
-        const float sin_phi = sin(phi_n * phi_spacing);
-        const float cos_phi = cos(phi_n * phi_spacing);
-        for (int theta_n = 0; theta_n < theta_steps; theta_n++)
+
+        float sin_spin_angle = sin(spin_angle);
+        float x, y, z, x_middle, y_middle, z_middle;
+        double luminance;
+        std::vector<float> coordinates, coordinates_middle;
+
+        for (int phi_n = 0; phi_n < phi_steps; phi_n++)
         {
-            const float sin_theta = sin(theta_n * theta_spacing);
-            const float cos_theta = cos(theta_n * theta_spacing);
+            x_middle = torus_center[phi_n][0];
+            y_middle = torus_center[phi_n][1];
+            z_middle = torus_center[phi_n][2];
+            
+            coordinates_middle = RotateOnX(std::vector<float>{x_middle, y_middle, z_middle}, spin_angle);
+            torus_center[phi_n] = coordinates_middle;
 
-      }
+
+
+            for (int theta_n = 0; theta_n < theta_steps; theta_n++)
+            {
+                x = torus[phi_n][theta_n][0];
+                y = torus[phi_n][theta_n][1];
+                z = torus[phi_n][theta_n][2];
+
+             /*   coordinates = RotateOnX(RotateOnXandY(std::vector<float>{x, y, z}, spin_angle), spin_angle);
+                coordinates_middle = RotateOnX(RotateOnXandY(std::vector<float>{x_middle, y_middle, z_middle}, spin_angle), spin_angle);*/
+                coordinates = RotateOnX(std::vector<float>{x, y, z}, spin_angle);
+                
+                torus[phi_n][theta_n] = coordinates;
+
+
+                std::vector<double> normals;
+                for (int i = 0; i < coordinates.size(); i++)
+                {
+                    normals.push_back(coordinates[i] - coordinates_middle[i]);
+                }
+
+                luminance = normals[0] * light_direction[0] + normals[1] * light_direction[1] + normals[2] * light_direction[2];
+                torus_luminance[phi_n][theta_n] = luminance;
+                if (luminance > max_luminance) {
+                    max_luminance = luminance;
+                }
+            }
+        }
     }
- 
+
+    void UpdateTorusOld(const float spin_angle)
+    {
+        torus.clear();
+        torus_luminance.clear();
+        max_luminance = 0;
+        std::vector<std::vector<float>> torus_normal_ring;
+        float x, y, z, x_middle, y_middle, z_middle;
+        float sin_spin_angle = sin(spin_angle);
+
+
+
+        for (int phi_n = 0; phi_n < phi_steps; phi_n++)
+        {
+            std::vector<std::vector<float>> theta_vector;
+            std::vector<float> theta_luminance_vector;
+
+
+            const float sin_phi = sin(phi_n * phi_spacing);
+            const float cos_phi = cos(phi_n * phi_spacing);
+            float luminance;
+
+            x_middle = radius_torus * cos_phi;
+            y_middle = radius_torus * sin_phi;
+            z_middle = 0.0;
+            //torus_normal_ring.push_back(RotateOnXandY(x_middle, y_middle, z_middle, spin_angle));
+
+
+
+            for (int theta_n = 0; theta_n < theta_steps; theta_n++)
+            {
+                const float sin_theta = sin(theta_n * theta_spacing);
+                const float cos_theta = cos(theta_n * theta_spacing);
+                x = cos_phi * (radius_tube * cos_theta + radius_torus);
+                y = sin_phi * (radius_tube * cos_theta + radius_torus);
+                z = radius_tube * sin_theta;
+
+                std::vector<float> coordinates = RotateOnX(RotateOnXandY(std::vector<float>{x, y, z}, spin_angle), spin_angle);
+                std::vector<float> middle_coordinates = RotateOnX(RotateOnXandY(std::vector<float>{x_middle, y_middle, z_middle}, spin_angle), spin_angle);
+
+                //std::vector<float> coordinates = RotateOnX(x, y, z, spin_angle);
+                //std::vector<float> middle_coordinates = RotateOnX(x_middle, y_middle, z_middle, spin_angle);
+
+                theta_vector.push_back(coordinates);
+
+
+                std::vector<float> normals;
+                for (int i = 0; i < coordinates.size(); i++)
+                {
+                    normals.push_back(coordinates[i] - middle_coordinates[i]);
+                }
+
+                luminance = normals[0]*light_direction[0] + normals[1]*light_direction[1] + normals[2]*light_direction[2];
+                theta_luminance_vector.push_back(luminance);
+                if (luminance > max_luminance) {
+                    max_luminance = luminance;
+                }
+
+
+            }
+            torus.push_back(theta_vector);
+            torus_luminance.push_back(theta_luminance_vector);
+        }
+    }
+
+
     
-    return complete_torus;
-}
 
-std::vector<std::vector<float>> Torus2dProjection()
-{
-    // Takes in a 3D torus and projects it on a 2D surface (a 2D vector).
-    const int row_count = 5;
-    const int column_count = 3;
+    bool IsWithinProjectionFrame(const int x, const int y)
+    {
+        const int screen_width_half = int(screen_width / 2.0);
+        return x > -screen_width_half && x < screen_width_half&& y > -screen_width_half && y < screen_width_half;
+    }
 
-    std::vector<std::vector<float>> projection(row_count, std::vector<float>(column_count, 1));
-    return projection;
-}
+
+    std::vector<std::vector<float>> GetProjection()
+    {
+        std::vector<std::vector<float>> projection(screen_width, std::vector<float>(screen_width, 0));
+        // Takes the 3D torus and projects it on a flat 2D surface.
+        const int row_count = 5;
+        const int column_count = 3;
+        double x, y, z, z_viewer;
+        float x_proj, y_proj;
+        std::vector<std::vector<float>> z_buffer(screen_width, std::vector<float>(screen_width, 0));
+
+        for (int phi_n = 0; phi_n < torus.size(); phi_n++)
+        {
+            for (int theta_n = 0; theta_n < torus[0].size(); theta_n++)
+            {
+                x = torus[phi_n][theta_n][0];
+                y = torus[phi_n][theta_n][1];
+                z = torus[phi_n][theta_n][2];
+                z_viewer = z + viewing_distance;
+                x_proj = viewing_distance * x / torus_distance;
+                y_proj = viewing_distance * y / torus_distance;
+                if (IsWithinProjectionFrame(x_proj, y_proj))
+                {
+                    int row = x_proj + screen_width / 2;
+                    int col = y_proj + screen_width / 2;
+                    float luminance = (torus_luminance[phi_n][theta_n] / max_luminance);
+
+                    //double distance = x * x + y * y + z_viewer * z_viewer;
+                    double distance = z_viewer;
+
+
+                    if (1 / distance > z_buffer[row][col])
+                    {
+                        projection[row][col] = luminance;
+                        //projection[row][col] = std::fabsf(luminance);
+                        z_buffer[row][col] = 1 / distance;
+                    }
+                }
+            }
+        }
+        return projection;
+    }
+
+
+    void RenderFrame()
+    {
+        std::vector<std::vector<float>> projection = GetProjection();
+        std::string string_render = "";
+        for (int row = 0; row < projection.size(); row++)
+        {
+            for (int col = 0; col < projection[0].size(); col++)
+            {
+                if (projection[row][col] > 0)
+                {
+                    string_render += '*';
+                }
+                else
+                {
+                    string_render += ' ';
+                }
+                string_render += ' ';
+            }
+            string_render += '\n';
+        }
+        std::cout << "\033[2J\033[1;1H" << std::flush;
+        std::cout << string_render << std::flush;
+    }
+
+
+    void RenderFrameShading()
+    {
+        std::vector<std::vector<float>> projection = GetProjection();
+        std::string string_render = "";
+        for (int row = 0; row < projection.size(); row++)
+        {
+            for (int col = 0; col < projection[0].size(); col++)
+            {
+                if (projection[row][col] > 0)
+                {
+                    string_render += shading_chars[int(projection[row][col]*12)];
+                }
+                else
+                {
+                    string_render += ' ';
+                }
+                string_render += ' ';
+            }
+            string_render += '\n';
+        }
+        ClearScreen();
+        std::cout << string_render << std::flush;
+    }
+
+    void ClearScreen()
+    {
+        std::cout << "\033[2J\033[1;1H" << std::flush;
+    }
+
+
+    
+
+    void RenderTorus()
+    {
+        const float spin_angle_steps = 150.0;
+        const float spin_angle = M_PI / spin_angle_steps;
+
+        CreateTorus();
+
+        while (true)
+        {
+            auto torus_time = std::chrono::steady_clock::now();
+            UpdateTorus(spin_angle);
+            auto projection_time = std::chrono::steady_clock::now();
+            GetProjection();
+            auto render_time = std::chrono::steady_clock::now();
+            RenderFrameShading();
+            auto end_time = std::chrono::steady_clock::now();
+            //spin_angle += spin_angle_step;
+            std::cout
+                << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - torus_time).count()
+                << " "
+                << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - projection_time).count()
+                << " "
+                << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - render_time).count()
+                << std::flush;
+
+
+
+        }
+    }
+
+};
+
 
 int main()
 {
-    const float radius_tube = 1;
-    const float radius_torus = 2;
-    const float torus_distance = 5;
-    const float screen_width = 100;
-    const float torus_displacement = 3 / 8;
-    const float viewing_distance = screen_width * torus_distance * torus_displacement * 1 / (radius_tube + radius_torus);
-
-    std::string shading_chars = ".,-~:;=!*#$@";
-    render_test();
-    return 0;
+while (true)
+{
+    Donut donut;
+    donut.RenderTorus();
 }
 
-
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
+return 0;
+}
